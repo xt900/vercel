@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 
 export default function App() {
   const [windowSize, setWindowSize] = useState({
@@ -12,6 +12,8 @@ export default function App() {
   const [showLoveNote, setShowLoveNote] = useState(false)
   const [showPhotoGallery, setShowPhotoGallery] = useState(false)
   const [showWishes, setShowWishes] = useState(false)
+  const [uploadedImages, setUploadedImages] = useState([])
+  const fileInputRef = useRef(null)
 
   useEffect(() => {
     const handleResize = () => {
@@ -29,6 +31,31 @@ export default function App() {
       return () => clearTimeout(timer)
     }
   }, [currentStep])
+
+  const handleImageUpload = (event) => {
+    const files = Array.from(event.target.files)
+    const imagePromises = files.map(file => {
+      return new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.onload = (e) => {
+          resolve({
+            url: e.target.result,
+            name: file.name,
+            id: Date.now() + Math.random()
+          })
+        }
+        reader.readAsDataURL(file)
+      })
+    })
+
+    Promise.all(imagePromises).then(newImages => {
+      setUploadedImages(prev => [...prev, ...newImages])
+    })
+  }
+
+  const removeImage = (id) => {
+    setUploadedImages(prev => prev.filter(img => img.id !== id))
+  }
 
   const FloatingElement = ({ emoji, delay = 0, index }) => {
     const startX = (index % 3) * (windowSize.width / 3) + Math.random() * 200
@@ -62,14 +89,14 @@ export default function App() {
     </div>
   )
 
-  // New component for hanging photo frames
-  const HangingPhoto = ({ index, emoji, caption, rotation }) => {
+  // Updated HangingPhoto component to display images
+  const HangingPhoto = ({ index, imageUrl, caption, rotation, onRemove }) => {
     const positionX = (index % 5) * (windowSize.width / 5) + Math.random() * 100
     const positionY = 50 + Math.random() * 100
     
     return (
       <div
-        className="absolute flex flex-col items-center justify-center animate-sway"
+        className="absolute flex flex-col items-center justify-center animate-sway group"
         style={{
           left: `${positionX}px`,
           top: `${positionY}px`,
@@ -81,10 +108,20 @@ export default function App() {
         {/* String */}
         <div className="h-12 w-0.5 bg-gradient-to-b from-yellow-200 to-transparent mb-1"></div>
         
-        {/* Photo frame */}
-        <div className="bg-white p-2 rounded-lg shadow-lg border-2 border-yellow-300 transform hover:scale-110 transition-transform duration-300">
-          <div className="text-3xl mb-1">{emoji}</div>
-          <div className="text-xs text-center text-gray-700 font-medium max-w-[60px]">{caption}</div>
+        {/* Photo frame with image */}
+        <div className="relative bg-white p-1 rounded-lg shadow-lg border-2 border-yellow-300 transform hover:scale-110 transition-transform duration-300">
+          <img 
+            src={imageUrl} 
+            alt={caption} 
+            className="w-16 h-16 object-cover rounded-md"
+          />
+          <button 
+            onClick={onRemove}
+            className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+          >
+            ×
+          </button>
+          <div className="text-xs text-center text-gray-700 font-medium mt-1 max-w-[70px] truncate">{caption}</div>
         </div>
       </div>
     )
@@ -327,25 +364,72 @@ export default function App() {
         ))}
         {showHearts && [...Array(50)].map((_, i) => <ConfettiHeart key={i} index={i} />)}
         
-        {/* Hanging photo frames */}
-        {[
-          { emoji: "💑", caption: "Us", rotation: -3 },
+        {/* Hanging photo frames with uploaded images */}
+        {uploadedImages.map((image, index) => (
+          <HangingPhoto 
+            key={image.id}
+            index={index}
+            imageUrl={image.url}
+            caption={image.name.split('.')[0]} // Use filename without extension as caption
+            rotation={index % 2 === 0 ? -3 : 2}
+            onRemove={() => removeImage(image.id)}
+          />
+        ))}
+        
+        {/* Default hanging frames if no images uploaded */}
+        {uploadedImages.length === 0 && [
+          
           { emoji: "🎂", caption: "Birthday", rotation: 2 },
           { emoji: "💕", caption: "Love", rotation: -4 },
+          { emoji: "💑", caption: "Us", rotation: -3 },
           { emoji: "🌹", caption: "Romance", rotation: 5 },
           { emoji: "⭐", caption: "Special", rotation: -2 },
         ].map((photo, index) => (
-          <HangingPhoto 
-            key={index} 
-            index={index} 
-            emoji={photo.emoji} 
-            caption={photo.caption} 
-            rotation={photo.rotation} 
-          />
+          <div
+            key={index}
+            className="absolute flex flex-col items-center justify-center animate-sway"
+            style={{
+              left: `${(index % 5) * (windowSize.width / 5) + Math.random() * 100}px`,
+              top: `${50 + Math.random() * 100}px`,
+              transform: `rotate(${photo.rotation}deg)`,
+              animationDelay: `${index * 0.5}s`,
+              animationDuration: `${8 + Math.random() * 4}s`,
+            }}
+          >
+            {/* String */}
+            <div className="h-12 w-0.5 bg-gradient-to-b from-yellow-200 to-transparent mb-1"></div>
+            
+            {/* Photo frame */}
+            <div className="bg-white p-2 rounded-lg shadow-lg border-2 border-yellow-300 transform hover:scale-110 transition-transform duration-300">
+              <div className="text-3xl mb-1">{photo.emoji}</div>
+              <div className="text-xs text-center text-gray-700 font-medium max-w-[60px]">{photo.caption}</div>
+            </div>
+          </div>
         ))}
       </div>
 
       <StarField />
+
+      {/* Image upload button */}
+      {/* {currentStep >= 3 && (
+        <div className="fixed bottom-4 right-4 z-20">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImageUpload}
+            accept="image/*"
+            multiple
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="bg-white/90 hover:bg-white text-pink-600 font-bold py-3 px-4 rounded-full shadow-lg transform hover:scale-110 transition-all duration-300 flex items-center"
+          >
+            <span className="mr-2">📸</span>
+            Add Photos
+          </button>
+        </div>
+      )} */}
 
       <div className="relative z-10 text-center px-4 sm:px-6 lg:px-8 w-full max-w-5xl mx-auto">
         {currentStep === 0 && (
@@ -391,10 +475,10 @@ export default function App() {
                   <span className="mr-4 text-2xl">🌈</span>
                   <span>You make every day brighter and more beautiful</span>
                 </div>
-                <div className="flex items-center text-lg sm:text-xl lg:text-2xl p-4 bg-white/15 rounded-xl backdrop-blur-sm">
+                {/* <div className="flex items-center text-lg sm:text-xl lg:text-2xl p-4 bg-white/15 rounded-xl backdrop-blur-sm">
                   <span className="mr-4 text-2xl">💕</span>
                   <span>Distance is just a number when love is this strong</span>
-                </div>
+                </div> */}
               </div>
             </div>
           </div>
